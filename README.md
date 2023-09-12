@@ -14,18 +14,18 @@ I wrote this code for my own use so it is not tested except for my own current m
 
 Tested on:
 
-        Hardware Version V1.00
-        Software Version V1.01.00T04.0
-        Boot Loader Version V1.0.00 
+ 	Hardware Version V1.00
+	Software Version V1.01.00T04.0
+	Boot Loader Version V1.0.00 
 
 Usage
 -----
 Usage: ./h369a.pl [-fhpstuv] [long options...]
 
-				Example 1: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
-				Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
-				Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
-				Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
+	Example 1: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
+	Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
+	Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
+	Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
