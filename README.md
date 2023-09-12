@@ -21,10 +21,11 @@ Tested on:
 Usage
 -----
 Usage: ./h369a.pl [-fhpstuv] [long options...]
-Example 1: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
-Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
-Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
-Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
+
+				Example 1: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
+				Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
+				Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
+				Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
