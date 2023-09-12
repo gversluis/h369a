@@ -12,6 +12,12 @@ Currently it supports:
 
 I wrote this code for my own use so it is not tested except for my own current modem.
 
+Tested on:
+
+        Hardware Version V1.00
+        Software Version V1.01.00T04.0
+        Boot Loader Version V1.0.00 
+
 Usage
 -----
 Usage: ./h369a.pl [-fhpstuv] [long options...]
