@@ -26,9 +26,9 @@ Usage: ./h369a.pl [-dfhpstuvw] [long options...]
     Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
     Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
     Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
-    Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --wifi
-    Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --devices
-    Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --status
+    Example 5: ./h369a.pl -h 192.168.1.254 -p "secret" --wifi
+    Example 6: ./h369a.pl -h 192.168.1.254 -p "secret" --devices
+    Example 7: ./h369a.pl -h 192.168.1.254 -p "secret" --status
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
