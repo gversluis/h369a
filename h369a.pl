@@ -19,6 +19,8 @@ Example 1: $0 -h 192.168.1.254 -p "secret" -s openvpn
 Example 2: $0 -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
 Example 3: $0 -h 192.168.1.254 -p "secret" -s openvpn --close
 Example 4: $0 -h 192.168.1.254 -p "secret" --ip
+Example 4: $0 -h 192.168.1.254 -p "secret" --wifi
+Example 4: $0 -h 192.168.1.254 -p "secret" --devices
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
@@ -41,10 +43,13 @@ WARNING: If your login failed to many times your access will be disabled for a w
 	[ 'close',			"Delete forwarding", { callbacks => { 
 		'Specify port or service' => sub {  defined $_[1]->{'service'} || defined $_[1]->{'port'}  },
 	} } ],
-	[ 'target|t=s',		"Forward service to ip", { callbacks => {	# implies is broken but still used for validation
+	[ 'target|t=s', "Forward service to ip", { callbacks => {	# implies is broken but still used for validation
 		'Valid ipv4' => sub { $_[0] =~ /^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$/ },
 		'Specify port or service' => sub {  defined $_[1]->{'service'} || defined $_[1]->{'port'}  },
 	} } ],
+	[ 'wifi|w',"List wifi devices" ],
+	[ 'devices|d',"List devices" ],
+	[ 'status', "Get status for interfaces" ],
 	[],
 	[ 'verbose|v',  "print extra stuff" ],
 	[ 'help',       "print usage message and exit", { shortcircuit => 1 } ],
@@ -66,7 +71,36 @@ sub init {
 	$ua->cookie_jar( {} );
 
 	my $response = login($ua, $opt->host, $opt->username, $password, $opt->force);
-#	print Dumper getWirelessDevices($ua, $opt->host);
+	if ($opt->wifi) {
+		my @devices = ();
+		push @devices, @{getWlanDevices($ua, $opt->host)};
+		push @devices, @{getWlanGuestDevices($ua, $opt->host)};
+		printf("%15s %40s %23s %s\n", "IPv4", "Host (Alias)", "MAC", "Interface");
+		foreach my $device (@devices) {
+			printf("%15s %40s %23s %s\n", $device->{'IPAddress'}, (ref($device->{'HostName'}) eq 'HASH'?'':$device->{'HostName'}).' '.(ref($device->{'AliasName'}) eq 'HASH'?'':'('.$device->{'AliasName'}.')'), $device->{'MACAddress'}, $device->{'Port'});
+		}
+	}
+
+	if ($opt->devices) {
+		my @devices = ();
+		push @devices, @{getWlanDevices($ua, $opt->host)};
+		push @devices, @{getWlanGuestDevices($ua, $opt->host)};
+		push @devices, @{getLanDevices($ua, $opt->host)};
+		printf("%15s %40s %23s %s\n", "IPv4", "Host (Alias)", "MAC", "Interface");
+		foreach my $device (@devices) {
+			printf("%15s %40s %23s %s\n", $device->{'IPAddress'}, (ref($device->{'HostName'}) eq 'HASH'?'':$device->{'HostName'}).' '.(ref($device->{'AliasName'}) eq 'HASH'?'':'('.$device->{'AliasName'}.')'), $device->{'MACAddress'}, $device->{'Port'});
+		}
+	}
+
+	if ($opt->status) {
+		my %status = (
+			'wlan' => getWlanStatus($ua, $opt->host),
+			'wlanguest' => getWlanGuestStatus($ua, $opt->host),
+			'lan' => getLanStatus($ua, $opt->host),
+		);
+		print Dumper \%status;
+	}
+
 	if ($opt->ip) {
 		print getIp($ua, $opt->host), "\n" if $opt->ip;
 	}
@@ -92,13 +126,34 @@ sub getUnique {
 
 sub instanceToSet {
 	my $instance = ref $_[0] eq 'HASH' ? $_[0] : die('Expected hashref instance but got: '.$_[0]);
-	my %set = ();
-	tie %set, 'Tie::IxHash';	# for readability, same order as array
+	tie my %set, 'Tie::IxHash';	# for readability, same order as array
 	my $values = $instance->{'ParaValue'};
 	for(my $i=0; $i<@$values; $i++) {
 		$set{ $instance->{'ParaName'}->[$i] } = $values->[$i];
 	}
 	return \%set;
+}
+
+sub instancesToSets {
+	my $instances = ref $_[0] eq 'ARRAY' ? $_[0] : die('Expected arrayref instance but got: '.$_[0]);
+	my @result = map { instanceToSet($_) } @$instances;
+  return \@result;
+}
+
+sub joinArrayHashes {
+	my $array1 = ref $_[0] eq 'ARRAY' ? $_[0] : die('Expected arrayref1 instance but got: '.Dumper $_[0]);
+	my $array1key = ref $_[1] eq '' ? $_[1] : die('Expected scalar1 but got: '.Dumper $_[1]);
+	my $array2 = ref $_[2] eq 'ARRAY' ? $_[2] : die('Expected arrayref2 instance but got: '.Dumper $_[2]);
+	my $array2key = ref $_[3] eq '' ? $_[3] : die('Expected scalar2 but got: '.Dumper $_[3]);
+	for(my $i=0; $i<@$array1; $i++) {
+		for(my $j=0; $j<@$array2; $j++) {
+			if ($array1->[$i]->{$array1key} eq $array2->[$j]->{$array2key}) {
+				tie my %set, 'Tie::IxHash', %{$array1->[$i]}, %{$array2->[$j]};
+				$array1->[$i] = \%set;
+			}
+		}
+	}
+	return $array1;
 }
 
 sub login {
@@ -162,8 +217,7 @@ sub getServices {
 	my $servicesXml = $response->content();
 	my $hash = XMLin($servicesXml, ForceArray => ['Instance','ParaName','ParaValue']);
 
-	my %services = ();
-	tie %services, 'Tie::IxHash';	# for readability, same order as array
+	tie my %services, 'Tie::IxHash';	# for readability, same order as array
 	my $options = $hash->{'OBJ_PFAPPLIST_ID'}->{'Games'};
 	my $values = $options->{'OptionValue'};
 	for(my $i=0; $i<@$values; $i++) {
@@ -194,8 +248,7 @@ sub getPortsServices {
 	my ($ua, $host) = @_;
 	my $services = getServices(@_);	# this makes sure the right page is loaded
 	my $response = $ua->get("http://$host/common_page/PortForwarding_APPNewandShow_lua.lua?_=".getUnique());	# Get service id, not needed
-	my %result = ();
-	tie %result, 'Tie::IxHash';	# for readability, same order as array
+	tie my %result, 'Tie::IxHash';	# for readability, same order as array
 	foreach my $service (values %$services) {
 		$response = $ua->get("http://$host/common_page/PortForwarding_APPNewandShow_lua.lua?InterfaceFilter=".$service->{'_InstID'}."&_=".getUnique());	# contains actual port mapping
 		my $xml = $response->content;
@@ -287,21 +340,130 @@ sub getIp {
 	return ($response->content =~ /IPAddress.*?(\d+\.\d+\.\d+\.\d+)/ ? $1 : die('IP not found in response: '.$response->content()));
 }
 
+# depricated, replaced by getWlanDevices
 sub getWirelessDevices {
 	my ($ua, $host) = @_;
 	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
 	$response = $ua->get("http://$host/getpage.lua?pid=1005&nextpage=home_wlanDevice_listNumLimit_lua.lua&_=".getUnique());
+	# http://192.168.1.254/common_page/home_AssociateDevs_lua.lua?AccessMode=WLAN&_=1735909877948
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my @devices = map { 
-		my %result = ();
-		for(my $i=0; $i<@{$_->{'ParaValue'}}; $i++) {
-			$result{ $_->{'ParaName'}->[$i] } = $_->{'ParaValue'}->[$i];
-		}
-		\%result;
-	} @{$hash->{'OBJ_ACCESSDEV_HOMEWLAN_ID'}->{'Instance'}};
-	return \@devices;
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_HOMEWLAN_ID'}->{'Instance'});
+	return $devices;
 }
 
+# depricated, replaced by getWlanDevices
+sub getAssociateWlanDevices {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/common_page/home_AssociateDevs_lua.lua?AccessMode=WLAN&_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	return $devices;
+}
 
+# depricated, replaced by getLanDevices
+sub getAssociateLanDevices {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/common_page/home_AssociateDevs_lua.lua?AccessMode=LAN&_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	return $devices;
+}
+
+sub getWlanStatus {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_Wlan_StatusStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
+	$response = $ua->get("http://$host/common_page/wlanStatus_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+
+	my $accesspoints = joinArrayHashes(
+		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'}), 'WLANViewName',
+		instancesToSets($hash->{'OBJ_WLANSETTING_ID'}->{'Instance'}), '_InstID'
+	);
+	$accesspoints = joinArrayHashes(
+		$accesspoints, 'WLANViewName',
+		instancesToSets($hash->{'OBJ_WLANCONFIGDRV_ID'}->{'Instance'}), 'WLANViewName'
+	);
+	#	print Dumper $accesspoints;
+	return $accesspoints;
+}
+
+sub getWlanDevices {
+	my ($ua, $host) = @_;
+	getWlanStatus($ua, $host);	# get access to status page
+	my $response = $ua->get("http://$host/common_page/home_wlanDevice_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	#	print Dumper $devices;
+	return $devices;
+}
+
+sub getWlanGuestStatus {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_wlan_GuestWiFiStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
+	$response = $ua->get("http://$host/common_page/Localnet_wlan_GuestWiFiStatus_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+
+	my $accesspoints = joinArrayHashes(
+		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'} || []), '_InstID',
+		instancesToSets($hash->{'OBJ_WLANKEY_ID'}->{'Instance'} || []), '_InstID'
+	);
+	$accesspoints = joinArrayHashes(
+		$accesspoints, '_InstID',
+		instancesToSets($hash->{'OBJ_GUESTWIFISTATUS_ID'}->{'Instance'} || []), '_InstID'
+	);
+	#	print Dumper $accesspoints;
+	return $accesspoints;
+}
+
+sub getWlanGuestDevices {
+	my ($ua, $host) = @_;
+	getWlanGuestStatus($ua, $host);
+	my $response = $ua->get("http://$host/common_page/Localnet_wlan_GuestWiFiDev_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	my $devices = instancesToSets($hash->{'OBJ_GUESTWIFIDEV_ID'}->{'Instance'} || []);
+	#	print Dumper $hash, $devices;
+	return $devices;
+}
+
+sub getLanStatus {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_LAN_LocalnetStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
+	$response = $ua->get("http://$host/common_page/lanStatus_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+
+	my $accesspoints = joinArrayHashes(
+		instancesToSets($hash->{'OBJ_ETH_ID'}->{'Instance'} || []), '_InstID',
+		instancesToSets($hash->{'OBJ_WANLAN_ID'}->{'Instance'} || []), '_InstID'
+	);
+	#	print Dumper $accesspoints;
+	return $accesspoints;
+}
+
+sub getLanDevices {
+	my ($ua, $host) = @_;
+	my $accesspoints = getLanStatus($ua, $host);
+	my $response = $ua->get("http://$host/common_page/home_lanDevice_lua.lua?_=".getUnique());
+	my $xml = $response->content;
+	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	my $devices = joinArrayHashes(
+		instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []), 'Port',
+		$accesspoints, 'AliasName'
+	);
+	#	print Dumper $hash, $devices;
+	return $devices;
+
+}
 
