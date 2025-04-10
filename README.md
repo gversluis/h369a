@@ -33,19 +33,22 @@ Options
 -------
 Run the program without arguments to get a list of options
 
-        -h STR --host STR      Modem ip
-        -u STR --username STR  Username
-        -p STR --password STR  Password
-        -f --force             Force another user to logout
-        --ip                   Get WAN IP address
-        -s STR --service STR   Get or change service
-        --port INT             Port number to get or set instead of service
-                               (TODO: create a service if it does not exist)
-        --close                Delete forwarding
-        -t STR --target STR    Forward service to ip
+        --host STR (or -h)      Modem ip
+        --username STR (or -u)  Username
+        --password STR (or -p)  Password
+        --force (or -f)         Force another user to logout
+        --ip                    Get WAN IP address
+        --service STR (or -s)   Get or change service
+        --port INT              Port number to get or set instead of service
+                                (TODO: create a service if it does not exist)
+        --close                 Delete forwarding
+        --target STR (or -t)    Forward service to ip
+        --wifi (or -w)          List wifi devices
+        --devices (or -d)       List devices
+        --status                Get status for interfaces
 
-        -v --verbose           print extra stuff
-        --help                 print usage message and exit
+        --verbose (or -v)       print extra stuff
+        --help                  print usage message and exit
 
 Known issues
 ------------

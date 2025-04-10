@@ -21,6 +21,7 @@ Example 3: $0 -h 192.168.1.254 -p "secret" -s openvpn --close
 Example 4: $0 -h 192.168.1.254 -p "secret" --ip
 Example 4: $0 -h 192.168.1.254 -p "secret" --wifi
 Example 4: $0 -h 192.168.1.254 -p "secret" --devices
+Example 4: $0 -h 192.168.1.254 -p "secret" --status
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
