@@ -349,7 +349,7 @@ sub getWirelessDevices {
 	# http://192.168.1.254/common_page/home_AssociateDevs_lua.lua?AccessMode=WLAN&_=1735909877948
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_HOMEWLAN_ID'}->{'Instance'});
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_HOMEWLAN_ID'}->{'Instance'} || []);
 	return $devices;
 }
 
@@ -360,7 +360,7 @@ sub getAssociateWlanDevices {
 	$response = $ua->get("http://$host/common_page/home_AssociateDevs_lua.lua?AccessMode=WLAN&_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []);
 	return $devices;
 }
 
@@ -371,7 +371,7 @@ sub getAssociateLanDevices {
 	$response = $ua->get("http://$host/common_page/home_AssociateDevs_lua.lua?AccessMode=LAN&_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []);
 	return $devices;
 }
 
@@ -384,12 +384,12 @@ sub getWlanStatus {
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
 
 	my $accesspoints = joinArrayHashes(
-		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'}), 'WLANViewName',
-		instancesToSets($hash->{'OBJ_WLANSETTING_ID'}->{'Instance'}), '_InstID'
+		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'} || []), 'WLANViewName',
+		instancesToSets($hash->{'OBJ_WLANSETTING_ID'}->{'Instance'} || []), '_InstID'
 	);
 	$accesspoints = joinArrayHashes(
 		$accesspoints, 'WLANViewName',
-		instancesToSets($hash->{'OBJ_WLANCONFIGDRV_ID'}->{'Instance'}), 'WLANViewName'
+		instancesToSets($hash->{'OBJ_WLANCONFIGDRV_ID'}->{'Instance'} || []), 'WLANViewName'
 	);
 	#	print Dumper $accesspoints;
 	return $accesspoints;
@@ -401,7 +401,7 @@ sub getWlanDevices {
 	my $response = $ua->get("http://$host/common_page/home_wlanDevice_lua.lua?_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'});
+	my $devices = instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []);
 	#	print Dumper $devices;
 	return $devices;
 }
