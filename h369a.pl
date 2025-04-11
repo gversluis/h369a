@@ -459,11 +459,14 @@ sub getLanDevices {
 	my $response = $ua->get("http://$host/common_page/home_lanDevice_lua.lua?_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
+	foreach my $accesspoint (@$accesspoints) {
+		delete $accesspoint->{'IPAddress'};
+	}
 	my $devices = joinArrayHashes(
 		instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []), 'Port',
 		$accesspoints, 'AliasName'
 	);
-	#	print Dumper $hash, $devices;
+#	print Dumper $hash, $devices;
 	return $devices;
 
 }
