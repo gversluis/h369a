@@ -149,7 +149,7 @@ sub joinArrayHashes {
 	for(my $i=0; $i<@$array1; $i++) {
 		for(my $j=0; $j<@$array2; $j++) {
 			if ($array1->[$i]->{$array1key} eq $array2->[$j]->{$array2key}) {
-				tie my %set, 'Tie::IxHash', %{$array1->[$i]}, %{$array2->[$j]};
+				tie my %set, 'Tie::IxHash', %{$array2->[$j]}, %{$array1->[$i]};	# second hash might overwrite keys from first hash, hash from array1 is leading
 				$array1->[$i] = \%set;
 			}
 		}
@@ -382,7 +382,6 @@ sub getWlanStatus {
 	$response = $ua->get("http://$host/common_page/wlanStatus_lua.lua?_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-
 	my $accesspoints = joinArrayHashes(
 		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'} || []), 'WLANViewName',
 		instancesToSets($hash->{'OBJ_WLANSETTING_ID'}->{'Instance'} || []), '_InstID'
@@ -459,9 +458,6 @@ sub getLanDevices {
 	my $response = $ua->get("http://$host/common_page/home_lanDevice_lua.lua?_=".getUnique());
 	my $xml = $response->content;
 	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	foreach my $accesspoint (@$accesspoints) {
-		delete $accesspoint->{'IPAddress'};
-	}
 	my $devices = joinArrayHashes(
 		instancesToSets($hash->{'OBJ_ACCESSDEV_ID'}->{'Instance'} || []), 'Port',
 		$accesspoints, 'AliasName'
