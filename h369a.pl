@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w -T
+#!/usr/bin/perl -w
 
 use strict;
 use LWP::UserAgent;
@@ -8,6 +8,8 @@ use Encode qw( decode );
 use Getopt::Long::Descriptive;
 use Tie::IxHash;
 use XML::Simple;
+my $lockfile = '/tmp/h369a.lock';
+my $locktimeout = 10;
 $| = 1;
 
 
@@ -29,7 +31,7 @@ WARNING: If your login failed to many times your access will be disabled for a w
 
 	|,
 
-	[ 'host|h=s',		"Modem ip", { required => 1 } ],
+	[ 'host|h=s',		"Modem ip", { required => 1, default => '192.168.1.254' } ],
 	[ 'username|u=s',	"Username", { required => 1, default => 'Admin' } ],
 	[ 'password|p=s',	"Password", { callbacks =>  {
 		'Give password as argument or via environment as password or PASSWORD' => sub { defined $_[1]->{'password'} || $ENV{'password'} || $ENV{'PASSWORD'} },
@@ -56,9 +58,8 @@ WARNING: If your login failed to many times your access will be disabled for a w
 	[ 'help',       "print usage message and exit", { shortcircuit => 1 } ],
 );
 
-
+lockfile();
 init($opt);
-
 
 sub init {
 	my $opt = $_[0] || die('Expected options');
@@ -119,6 +120,25 @@ sub init {
 		}
 	}
 	logout($ua, $opt->host);
+}
+
+END {
+	unlock();
+}
+
+sub unlock {
+  unlink $lockfile if -e $lockfile && do { open my $fh, '<', $lockfile; chomp(my $x = <$fh>); $x } == $$;
+}
+
+sub lockfile {
+	while($locktimeout-->0 && -e $lockfile) {
+		sleep 1;
+	}
+	open(my $fh, '>', $lockfile) or die $!; print $fh $$; close $fh;
+	$SIG{TERM} = $SIG{INT} = sub {
+		unlock();
+	};
+
 }
 
 sub getUnique {
