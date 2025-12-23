@@ -20,15 +20,16 @@ Tested on:
 
 Usage
 -----
-Usage: ./h369a.pl [-dfhpstuvw] [long options...]
+Usage: ./h369a.pl [-dfhprstuvw] [long options...]
 
-    Example 1: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
-    Example 2: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
-    Example 3: ./h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
-    Example 4: ./h369a.pl -h 192.168.1.254 -p "secret" --ip
-    Example 5: ./h369a.pl -h 192.168.1.254 -p "secret" --wifi
-    Example 6: ./h369a.pl -h 192.168.1.254 -p "secret" --devices
-    Example 7: ./h369a.pl -h 192.168.1.254 -p "secret" --status
+    Example 1: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" -s openvpn
+    Example 2: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
+    Example 3: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" -s openvpn --close
+    Example 4: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" --ip
+    Example 5: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" --reboot
+    Example 6: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" --wifi
+    Example 7: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" --devices
+    Example 8: /usr/local/bin/h369a.pl -h 192.168.1.254 -p "secret" --status
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
@@ -38,9 +39,11 @@ Run the program without arguments to get a list of options
 
         --host STR (or -h)      Modem ip
         --username STR (or -u)  Username
-        --password STR (or -p)  Password
+        --password STR (or -p)  Password or set your password through
+                                environment variable PASSWORD
         --force (or -f)         Force another user to logout
         --ip                    Get WAN IP address
+        --reboot (or -r)        Reboot modem
         --service STR (or -s)   Get or change service
         --port INT              Port number to get or set instead of service
                                 (TODO: create a service if it does not exist)

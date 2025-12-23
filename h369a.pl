@@ -21,9 +21,10 @@ Example 1: $0 -h 192.168.1.254 -p "secret" -s openvpn
 Example 2: $0 -h 192.168.1.254 -p "secret" -s openvpn --target 192.168.1.6
 Example 3: $0 -h 192.168.1.254 -p "secret" -s openvpn --close
 Example 4: $0 -h 192.168.1.254 -p "secret" --ip
-Example 5: $0 -h 192.168.1.254 -p "secret" --wifi
-Example 6: $0 -h 192.168.1.254 -p "secret" --devices
-Example 7: $0 -h 192.168.1.254 -p "secret" --status
+Example 5: $0 -h 192.168.1.254 -p "secret" --reboot
+Example 6: $0 -h 192.168.1.254 -p "secret" --wifi
+Example 7: $0 -h 192.168.1.254 -p "secret" --devices
+Example 8: $0 -h 192.168.1.254 -p "secret" --status
 
 To open specific ports create services with port mappings manually under Settings > Port Forwarding - IPv4 > Application Configuration > Create New App Name
 
@@ -33,11 +34,12 @@ WARNING: If your login failed to many times your access will be disabled for a w
 
 	[ 'host|h=s',		"Modem ip", { required => 1, default => '192.168.1.254' } ],
 	[ 'username|u=s',	"Username", { required => 1, default => 'Admin' } ],
-	[ 'password|p=s',	"Password", { callbacks =>  {
+	[ 'password|p=s',	"Password or set your password through environment variable PASSWORD", { callbacks =>  {
 		'Give password as argument or via environment as password or PASSWORD' => sub { defined $_[1]->{'password'} || $ENV{'password'} || $ENV{'PASSWORD'} },
 	} } ],
 	[ 'force|f',		"Force another user to logout" ],
 	[ 'ip',				"Get WAN IP address" ],
+	[ 'reboot|r',		"Reboot modem" ],
 #	[ 'sleep',			"Seconds to sleep when another user is logged in and try again" ],	# not supported yet
 	[ 'service|s=s',	"Get or change service", { callbacks => { 
 		'Specify either port OR service' => sub {  !defined $_[1]->{'port'}  },
@@ -73,6 +75,11 @@ sub init {
 	$ua->cookie_jar( {} );
 
 	my $response = login($ua, $opt->host, $opt->username, $password, $opt->force);
+
+	if ($opt->reboot) {
+		print reboot($ua, $opt->host), "\n";
+	}
+
 	if ($opt->wifi) {
 		my @devices = ();
 		push @devices, @{getWlanDevices($ua, $opt->host)};
@@ -104,7 +111,7 @@ sub init {
 	}
 
 	if ($opt->ip) {
-		print getIp($ua, $opt->host), "\n" if $opt->ip;
+		print getIp($ua, $opt->host), "\n";
 	}
 
 	my $service = $opt->service || undef;
@@ -351,6 +358,26 @@ sub deleteService {
 		"_sessionTOKEN" => $service->{'session'},
 	});
 	return getService($ua, $host, $serviceName);
+}
+
+sub reboot {
+	my ($ua, $host) = @_;
+	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
+	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_LanMgrIpv4_t.lp&Menu3Location=0&_=".getUnique());
+	$response = $ua->get("http://$host/common_page/Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua?_=".getUnique());
+	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=ManagDiag_DeviceManag_t.lp&Menu3Location=0&_=".getUnique());
+	if ($response->content =~ /_sessionTmpToken\s*=\s*"(.*?)"/) {
+		my $token = $1;
+		$token =~ s/\\x//g;
+		$token = pack("H*", $token);	# not very error prone but it is safer than eval
+		$response = $ua->post("http://$host/common_page/deviceManag_lua.lua", {
+			"IF_ACTION" => "Restart",
+			"Btn_restart" => "",
+			"_sessionTOKEN" => $token,
+		});
+		return $response->content;
+	}
+	return "Could not fetch session token required to reboot.";
 }
 
 sub getIp {
