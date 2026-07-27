@@ -63,6 +63,7 @@ WARNING: If your login failed to many times your access will be disabled for a w
 	} } ],
 	[ 'wifi|w',"List wifi devices" ],
 	[ 'devices|d',"List devices" ],
+	[ 'countrycode|c=s',	"Set wifi country code. WARNING: Setting an invalid country code could result in illegal values"],
 	[ 'status', "Get status for interfaces" ],
 	[ 'exec=s', "For development" ],
 	[],
@@ -77,7 +78,7 @@ sub init {
 	my $opt = $_[0] || die('Expected options');
 	my $password = $opt->password || $ENV{'password'} || $ENV{'PASSWORD'};
 	warn "Password not given" if !$password;
-	print($usage->text), exit if $opt->help || !$password || (!$opt->ip && !$opt->reboot && !$opt->service && !$opt->port && !$opt->wifi && !$opt->devices && !$opt->status && !$opt->verbose && !$opt->exec);
+	print($usage->text), exit if $opt->help || !$password || (!$opt->ip && !$opt->reboot && !$opt->service && !$opt->port && !$opt->wifi && !$opt->devices && !$opt->status && !$opt->verbose && !$opt->countrycode && !$opt->exec);
 
 	warn("Force ignored, not supported") if $opt->force;
 
@@ -117,7 +118,12 @@ sub init {
 		print getIp($ua, $opt->host), "\n";
 	}
 
+	if ($opt->countrycode) {
+		print Dumper setWifiCountry($ua, $opt->countrycode);
+	}
+
 	if ($opt->exec) {
+		setAllowLoginAfterLogout($ua);
 		my $result = execute($ua, $opt->exec);
 		print $result, "\n";
 	}
@@ -372,41 +378,46 @@ sub setWifiCountry {
 	my ($ssh2, $country_code) = @_;
 	# key line is nvram set asuscfecommit=1 — that's the flag that tells the firmware to actually push the asuscfeX:ccode values into the CFE partition on this commit/reboot cycle
 	# instead of writing to regular nvram image that gets overridden at boot.
-	my $res = execute($ssh2, qq|
-		nvram set asuscfe0:ccode=$country_code;
-		nvram set asuscfe1:ccode=$country_code;
-		nvram set asuscfe0:regrev=0;
-		nvram set asuscfe1:regrev=0;
-		nvram set asuscfecommit=1;
-		nvram set 0:regrev=0;
-		nvram set 1:regrev=0;
-		nvram set 0:ccode=$country_code;
-		nvram set 1:ccode=$country_code;
-		nvram set pci/1/1/ccode=$country_code;
-		nvram set pci/1/1/regrev=0;
-		nvram set pci/2/1/ccode=$country_code;
-		nvram set pci/2/1/regrev=0;
-		nvram set regulation_domain=$country_code;
-		nvram set regulation_domain_5G=$country_code;
-		nvram set wl_country_code=$country_code;
-		nvram set wl_country_rev=0;
-		nvram set wl0_country=$country_code;
-		nvram set wl0_country_code=$country_code;
-		nvram set wl0_country_rev=0;
-		nvram set wl0_reg_mode=off;
-		nvram set wl1_country=$country_code;
-		nvram set wl1_country_code=$country_code;
-		nvram set wl1_country_rev=0;
-		nvram set wl1_reg_mode=off;
-		nvram commit;
-		service restart_network;
-		wl -i eth1 txpwr
-		wl -i eth1 txpwr_target_max
-		wl -i eth1 country
-		wl -i eth2 txpwr
-		wl -i eth2 txpwr_target_max
+	die "Invalid country code $country_code" if $country_code !~ /^[A-Z]{2}$/;
+	my $command = qq|
+		wl -i eth1 country $country_code &&
+		wl -i eth2 country $country_code &&
+		nvram set asuscfe0:ccode=$country_code &&
+		nvram set asuscfe1:ccode=$country_code &&
+		nvram set asuscfe0:regrev=0 &&
+		nvram set asuscfe1:regrev=0 &&
+		nvram set asuscfecommit=1 &&
+		nvram set 0:regrev=0 &&
+		nvram set 1:regrev=0 &&
+		nvram set 0:ccode=$country_code &&
+		nvram set 1:ccode=$country_code &&
+		nvram set pci/1/1/ccode=$country_code &&
+		nvram set pci/1/1/regrev=0 &&
+		nvram set pci/2/1/ccode=$country_code &&
+		nvram set pci/2/1/regrev=0 &&
+		nvram set regulation_domain=$country_code &&
+		nvram set regulation_domain_5G=$country_code &&
+		nvram set wl_country_code=$country_code &&
+		nvram set wl_country_rev=0 &&
+		nvram set wl0_country=$country_code &&
+		nvram set wl0_country_code=$country_code &&
+		nvram set wl0_country_rev=0 &&
+		nvram set wl0_reg_mode=off &&
+		nvram set wl1_country=$country_code &&
+		nvram set wl1_country_code=$country_code &&
+		nvram set wl1_country_rev=0 &&
+		nvram set wl1_reg_mode=off &&
+		nvram commit &&
+		service restart_network &&
+		wl -i eth1 txpwr &&
+		wl -i eth1 txpwr_target_max &&
+		wl -i eth1 country &&
+		wl -i eth2 txpwr &&
+		wl -i eth2 txpwr_target_max &&
 		wl -i eth2 country
-	|);
+	|;
+	print $command;
+	my $res = execute($ssh2, $command);
 	return $res;
 }
 
@@ -555,62 +566,15 @@ sub getNetworkDevices {
   return \@out;
 }
 
-
-
-sub getWlanStatus {
-	my ($ua, $host) = @_;
-	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
-	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_Wlan_StatusStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
-	$response = $ua->get("http://$host/common_page/wlanStatus_lua.lua?_=".getUnique());
-	my $xml = $response->content;
-	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-	my $accesspoints = joinArrayHashes(
-		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'} || []), 'WLANViewName',
-		instancesToSets($hash->{'OBJ_WLANSETTING_ID'}->{'Instance'} || []), '_InstID'
-	);
-	$accesspoints = joinArrayHashes(
-		$accesspoints, 'WLANViewName',
-		instancesToSets($hash->{'OBJ_WLANCONFIGDRV_ID'}->{'Instance'} || []), 'WLANViewName'
-	);
-	#	print Dumper $accesspoints;
-	return $accesspoints;
+sub setAllowLoginAfterLogout {
+	my ($ssh2) = @_;
+	my $out = execute($ssh2, qq|
+		umount /www/Main_Login.asp \|\| 
+		cp /www/Main_Login.asp /tmp/Main_Login.asp &&
+		mount --bind /tmp/Main_Login.asp /www/Main_Login.asp &&
+		sed -i 's/document\\.getElementById("login_filed")\\.style\\.display ="none";/\\/\\/document.getElementById("login_filed").style.display ="none";/' /tmp/Main_Login.asp
+	|);
+	print Dumper $out;
+	return Dumper $out;
 }
-
-
-sub getWlanGuestStatus {
-	my ($ua, $host) = @_;
-	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
-	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_wlan_GuestWiFiStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
-	$response = $ua->get("http://$host/common_page/Localnet_wlan_GuestWiFiStatus_lua.lua?_=".getUnique());
-	my $xml = $response->content;
-	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-
-	my $accesspoints = joinArrayHashes(
-		instancesToSets($hash->{'OBJ_WLANAP_ID'}->{'Instance'} || []), '_InstID',
-		instancesToSets($hash->{'OBJ_WLANKEY_ID'}->{'Instance'} || []), '_InstID'
-	);
-	$accesspoints = joinArrayHashes(
-		$accesspoints, '_InstID',
-		instancesToSets($hash->{'OBJ_GUESTWIFISTATUS_ID'}->{'Instance'} || []), '_InstID'
-	);
-	#	print Dumper $accesspoints;
-	return $accesspoints;
-}
-
-sub getLanStatus {
-	my ($ua, $host) = @_;
-	my $response = $ua->get("http://$host/");	# always go back to first page before requesting new pages
-	$response = $ua->get("http://$host/getpage.lua?pid=123&nextpage=Localnet_LAN_LocalnetStatus_t.lp&Menu3Location=0&_=".getUnique());	# get access to status page
-	$response = $ua->get("http://$host/common_page/lanStatus_lua.lua?_=".getUnique());
-	my $xml = $response->content;
-	my $hash = XMLin($xml, ForceArray => ['Instance','ParaName','ParaValue']);
-
-	my $accesspoints = joinArrayHashes(
-		instancesToSets($hash->{'OBJ_ETH_ID'}->{'Instance'} || []), '_InstID',
-		instancesToSets($hash->{'OBJ_WANLAN_ID'}->{'Instance'} || []), '_InstID'
-	);
-	#	print Dumper $accesspoints;
-	return $accesspoints;
-}
-
 
